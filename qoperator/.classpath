@@ -32,5 +32,6 @@
 			<attribute name="maven.pomderived" value="true"/>
 		</attributes>
 	</classpathentry>
+	<classpathentry kind="lib" path="E:/семестър 3/UML/Virtual Queues/Programming/Training/VQ QueueBoard/joda-time-2.1.jar"/>
 	<classpathentry kind="output" path="target/classes"/>
 </classpath>
