@@ -16,7 +16,7 @@ public class TasksManager implements Runnable {
 	private Map<String, MessageResponder> responders = new HashMap<String, MessageResponder>();
 	public static final MessageQueue messageQueue = MessageQueue.getInstance();
 	private static final TasksManager instance = new TasksManager();
-	
+		
 	public static TasksManager getInstance(){
 		return instance;
 	}
