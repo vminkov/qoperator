@@ -46,8 +46,8 @@ public class Ticket implements Serializable {
 		this.reason = reason_arg;
 		this.duration = duration_arg;
 		this.startDate = startDate_arg;
-		this.endDate = startDate_arg.plus(duration_arg);
-		this.type = type_arg;
+		this.endDate = startDate_arg.plusMinutes(duration_arg);
+		this.setType(type_arg);
 	}
 	public Ticket(final TicketType templateTicket, final DateTime startDate_arg, int orderNum_arg){
 		this.orderNum = orderNum_arg;
@@ -57,7 +57,7 @@ public class Ticket implements Serializable {
 		
 		this.reason = templateTicket.reason;
 		this.duration = templateTicket.duration;
-		this.type = templateTicket.type;
+		this.setType(templateTicket.type);
 	}
 	/**
 	 * 
@@ -88,5 +88,21 @@ public class Ticket implements Serializable {
 	
 	public DateTime getEndDate(){
 		return this.endDate;
+	}
+	public int getType() {
+		return type;
+	}
+	
+	/**
+	 * @see TicketType
+	 * @param type
+	 */
+	public void setType(int type) {
+		//TODO use type to change fields like reason, duration, etc (@see constructor w/ TicketType)
+		this.type = type;
+	}
+	public void moveInTime(long timeDeltaMillis) {
+		startDate = startDate.plus(timeDeltaMillis);
+		endDate = endDate.plus(timeDeltaMillis);
 	}
 }

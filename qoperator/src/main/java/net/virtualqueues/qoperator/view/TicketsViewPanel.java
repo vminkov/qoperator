@@ -6,6 +6,8 @@ import java.awt.Dimension;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
+import org.joda.time.DateTime;
+
 public class TicketsViewPanel extends JPanel {
 	/**
 	 * 
@@ -17,8 +19,8 @@ public class TicketsViewPanel extends JPanel {
 		setBackground(new Color(255,255,255));//127,127,127));
 		setLayout(new BorderLayout());
 		
-		
-		add(new TimelineWrapper());
+		//Timeline for today
+		add(new TimelineWrapper(new DateTime()));
 		
 		add(new ActionsPanel(), BorderLayout.SOUTH);
 	}

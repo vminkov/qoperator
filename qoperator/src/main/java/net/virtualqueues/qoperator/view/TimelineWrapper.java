@@ -1,32 +1,36 @@
 package net.virtualqueues.qoperator.view;
 
-import java.awt.Canvas;
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Dimension;
 import java.awt.Graphics;
-import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.Label;
+import java.awt.event.ComponentEvent;
+import java.awt.event.ComponentListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.imageio.ImageIO;
 import javax.swing.JLayeredPane;
 
-public class TimelineWrapper extends JLayeredPane {
+import net.virtualqueues.qoperator.controller.DailyTicketsManager;
+import net.virtualqueues.qoperator.model.DailyTickets;
 
-	/**
-	 * 
-	 */
+import org.joda.time.DateTime;
+
+public class TimelineWrapper extends JLayeredPane {
 	private static final long serialVersionUID = 1L;
 	private static final String timelineBackgroundPath = "./res/timeline.png";
 	private static BufferedImage image;
-
+	private final DateTime day;
+	private final DailyTicketsManager dtm = new DailyTicketsManager(new DailyTickets());
+	private final List<TicketObject> ticketLabels = new ArrayList<TicketObject>();
+	
 	private static int MAX_WIDTH = 0;
 	private static int MAX_HEIGHT = 0;
 	private static int MIN_WIDTH = 0;
@@ -40,11 +44,17 @@ public class TimelineWrapper extends JLayeredPane {
 	private static int AREA_HEIGHT = 0;
 	private static int AREA_WIDTH = 0;
 
-	private static int[] LAST_X = new int[100];
+	private static int[] LAST_X = new int[1024];
 	private static int LAST_POINTER_POSITION = 0;
+	
+	private static final double IMAGE_TIMESPAN = 1.5;
+	private static double PIXELS_PER_HOUR = 0;
+	//OFFSET will be used to calculate the difference from the most left viewable time to 12:00 at noon
 	private static int OFFSET = 0;
 	
-	public TimelineWrapper(){
+	public TimelineWrapper(DateTime day_arg){
+		day = day_arg;
+		
 		File imgFile = new File(timelineBackgroundPath);
 		try{
 			TimelineWrapper.image = ImageIO.read(imgFile);
@@ -69,7 +79,6 @@ public class TimelineWrapper extends JLayeredPane {
 			public void mouseDragged(MouseEvent event) {
 				TimelineWrapper source = (TimelineWrapper) event.getSource();
 				Component[] components = getComponents();
-
 				int i = 0;
 				
 				for(Component comp : components){
@@ -89,17 +98,7 @@ public class TimelineWrapper extends JLayeredPane {
 		});
 		addMouseListener(new MouseListener() {
 			@Override
-			public void mouseReleased(MouseEvent event) {
-				/*TimelineWrapper source = (TimelineWrapper) event.getSource();
-				Component[] components = source.getComponents();
-				int i=0;
-				for(Component comp : components){	
-					comp.setLocation( LAST_X[i] + event.getX(), comp.getY());
-					i++;
-				}
-				OFFSET +=  event.getX() - LAST_POINTER_POSITION ;
-				source.repaint();*/
-			}
+			public void mouseReleased(MouseEvent event) {}
 			@Override
 			public void mousePressed(MouseEvent event) {
 				Component[] comps = getComponents();
@@ -109,9 +108,7 @@ public class TimelineWrapper extends JLayeredPane {
 					i++;
 				}
 				LAST_POINTER_POSITION = event.getX();
-
 			}
-			
 			@Override
 			public void mouseExited(MouseEvent arg0) {}
 			@Override
@@ -120,19 +117,76 @@ public class TimelineWrapper extends JLayeredPane {
 			public void mouseClicked(MouseEvent arg0) {}
 		});
 		
-		TicketObject tickObj = new TicketObject("Label is label");
-		add(tickObj, JLayeredPane.DRAG_LAYER.intValue());
+		ticketLabels.add(new TicketObject("Label is label", dtm.getUniqueOrderID(), mostLeftVisibleDateTime(0), 0));
 		
-		TicketObject tickObj2 = new TicketObject("Another label");
-		tickObj2.setForeground(new Color(255,122,0));
-		tickObj2.setBackground(new Color(122,0,255));
-		add(tickObj2, JLayeredPane.DRAG_LAYER.intValue());
+		ticketLabels.add(new TicketObject("Another label", dtm.getUniqueOrderID(), mostLeftVisibleDateTime(20), 0));
+				
+		add(ticketLabels.get(0), JLayeredPane.DRAG_LAYER.intValue());
 		
-		Graphics g = image.getGraphics();
+		ticketLabels.get(1).setForeground(new Color(255,122,0));
+		ticketLabels.get(1).setBackground(new Color(122,0,255));
+		add(ticketLabels.get(1), JLayeredPane.DRAG_LAYER.intValue());
+
+		//TODO: put component listener that arranges the tickets on resize
+		addComponentListener(new ComponentListener() {
+			@Override
+			public void componentShown(ComponentEvent e) {}
+			@Override
+			public void componentResized(ComponentEvent e) {
+				rearrange();
+			}
+			@Override
+			public void componentMoved(ComponentEvent e) {}
+			@Override
+			public void componentHidden(ComponentEvent e) {		}
+		});
 		
-		//g.drawString("wtf is this", 50 , 50);
+		ComponentListener[] listeners = getComponentListeners();
+		for(ComponentListener lsnr : listeners){
+			System.out.println("counting: "+lsnr.toString());
+		}
+		//rearrange();
+	}
+	
+	private void rearrange(){
+		for(TicketObject tickObj : ticketLabels){
+			int newPosition = getPosition(tickObj.ticketModel.getStartDate());
+			int newEnd = getPosition(tickObj.ticketModel.getEndDate());
+			int newWidth = newEnd - newPosition;
+			System.out.println(newPosition + " " + newEnd + " : " + tickObj.ticketModel.getStartDate().getMinuteOfDay() + " " + tickObj.ticketModel.getEndDate().getMinuteOfDay());
+			tickObj.setLocation(newPosition, tickObj.getY());
+			tickObj.setSize(newWidth, tickObj.getHeight());
+		}
+	}
+	public int getPosition(final DateTime time) {
+		long DAY_MILLIS = time.getMillisOfDay();
+		DAY_MILLIS -= 1000 * 60 * 60 * 12; //minus 12 hours to get to 00:00
 		
-		add(new Canvas());
+		double PANEL_OFFSET = ((double) DAY_MILLIS / (IMAGE_TIMESPAN * 60 * 60 * 1000)) * (double) AREA_WIDTH;
+
+		return (int) PANEL_OFFSET;
+	}
+
+	private DateTime mostLeftVisibleDateTime(int minutesOffset){
+		//AREA_WIDTH equals 1.5 hours (1:30), see IMAGE_TIMESPAN
+		final long MINS_IN_AN_HOUR = 60;
+		final long SECS_IN_A_MIN = 60;
+		final long MILLIS_IN_A_SEC = 1000;
+
+		DateTime newTicketDate = new DateTime(day.getMillis() - day.getMillisOfDay() + 1000 * 60 * 60 * 12 + 
+				(((long) ((double) OFFSET / (double) AREA_WIDTH)) * MINS_IN_AN_HOUR + minutesOffset) * SECS_IN_A_MIN * MILLIS_IN_A_SEC);
+		System.out.println(newTicketDate);
+		return newTicketDate;
+	}
+
+	public long getTimeDeltaMillis(int xDelta, DateTime oldDate){
+		//AREA_WIDTH equals 1.5 hours (1:30), see IMAGE_TIMESPAN
+		final long MINS_IN_AN_HOUR = 60;
+		final long SECS_IN_A_MIN = 60;
+		final long MILLIS_IN_A_SEC = 1000;
+
+		long timeDeltaMillis = ((long) ((double)( xDelta  * MINS_IN_AN_HOUR * SECS_IN_A_MIN * MILLIS_IN_A_SEC) / PIXELS_PER_HOUR));
+		return timeDeltaMillis;
 	}
 	
 	private void computeDimensions()
@@ -180,6 +234,7 @@ public class TimelineWrapper extends JLayeredPane {
 				if((HEIGHT - AREA_HEIGHT) / 2 > 0)
 					START_HEIGHT = (HEIGHT - AREA_HEIGHT) / 2;
 			}
+			PIXELS_PER_HOUR = ((double) AREA_WIDTH / IMAGE_TIMESPAN);
 		}
 	}
 	
@@ -188,15 +243,6 @@ public class TimelineWrapper extends JLayeredPane {
 	 * Makes the timeline background resize in accordance with the timeline area size.
 	 * Use the properties MAX/MIN_TILE_WIDTH/HEIGHT in the constructor for adjustments
 	 */
-	/*@Override
-	public void paintComponent(Graphics g){
-		super.paintComponent(g);
-		computeDimensions();
-		
-		g.drawImage(image, START_WIDTH,  START_HEIGHT,
-					AREA_WIDTH, AREA_HEIGHT, this );
-	}
-	*/	
 	@Override
 	public void paintComponent(Graphics g){
 		super.paintComponent(g);
@@ -206,9 +252,8 @@ public class TimelineWrapper extends JLayeredPane {
 		{
 			float columns = (((float) getWidth()) / ((float) AREA_WIDTH));
 			for(int i=-1; i <= columns + 1; i++){
-				OFFSET %= AREA_WIDTH;
-				g.drawImage(image, i*AREA_WIDTH + OFFSET , START_HEIGHT, AREA_WIDTH, AREA_HEIGHT, this );
-				//System.out.println(columns + " " + i*START_WIDTH  + " " + OFFSET);
+				//OFFSET %= AREA_WIDTH;
+				g.drawImage(image, i*AREA_WIDTH + (OFFSET % AREA_WIDTH) , START_HEIGHT, AREA_WIDTH, AREA_HEIGHT, this );
 			}
 			
 		}
