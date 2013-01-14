@@ -8,14 +8,12 @@ import java.awt.event.MouseMotionListener;
 import java.util.Comparator;
 
 import javax.swing.BorderFactory;
-import javax.swing.JButton;
 import javax.swing.JLabel;
 
-import org.joda.time.DateTime;
+import net.virtualqueues.model.Ticket;
+import net.virtualqueues.model.TicketsFactory;
 
-import net.virtualqueues.qoperator.model.Ticket;
-import net.virtualqueues.qoperator.model.TicketType;
-import net.virtualqueues.qoperator.model.TicketsFactory;
+import org.joda.time.DateTime;
 
 public class TicketObject extends JLabel implements Comparator<TicketObject> {
 
@@ -28,24 +26,32 @@ public class TicketObject extends JLabel implements Comparator<TicketObject> {
 	private static int DEFAULT_DURATION = 10;
 	private int X_BEFORE_MOVE = 0;
 
-	public TicketObject(String label, int uniqueID, DateTime startDate, int position){
-		super(label + uniqueID);
-		
-		ticketModel = new Ticket(label, DEFAULT_DURATION, uniqueID, startDate, TicketsFactory.DEFAULT_TICKET_TYPE);
-		
-		this.setLocation(position, this.getY());
-		this.setBorder(BorderFactory.createEtchedBorder());
-		this.setPreferredSize(new Dimension(240, 90));
-		this.setBackground(new Color(0,255,0));		
-		this.setOpaque(true);
-		this.add(new JButton("click here!"));
-		addMouseMotionListener(new MouseMotionListener() {
-			
-			@Override
-			public void mouseMoved(MouseEvent event) {
+	public TicketObject(final Ticket ticketModel_arg){
+		super("not initialized");
 
-			}
+		if(ticketModel_arg == null){
+			ticketModel = TicketsFactory.getTicketFromType(TicketsFactory.getTicketType(TicketsFactory.DEFAULT_TICKET_TYPE), new DateTime(0), 0);
+		}else{
+			ticketModel = ticketModel_arg;
+		}
+		this.setText(ticketModel_arg.getReason() + ticketModel_arg.getUniqueID());
+		
+		initialize();
+	}
+	
+	private void initialize(){
+		Dimension defaultSize = new Dimension(240, 90);
 			
+		//this.setLocation(position, this.getY());
+		this.setBorder(BorderFactory.createEtchedBorder());
+		this.setPreferredSize(defaultSize);
+		this.setBackground(new Color(0,255,0));		
+		//XXX should we do this? making it opaque can make
+		this.setOpaque(true);
+	
+		addMouseMotionListener(new MouseMotionListener() {
+			@Override
+			public void mouseMoved(MouseEvent event) {}
 			@Override
 			public void mouseDragged(MouseEvent event) {
 				TicketObject source = (TicketObject) event.getSource() ;
@@ -65,9 +71,8 @@ public class TicketObject extends JLabel implements Comparator<TicketObject> {
 				TicketObject source = (TicketObject) event.getSource() ;
 				int deltaX = event.getXOnScreen() - X_BEFORE_MOVE;
 				TimelineWrapper parent = (TimelineWrapper) source.getParent();
-				ticketModel.moveInTime(parent.getTimeDeltaMillis(deltaX, ticketModel.getStartDate()));
+				ticketModel.moveInTime(parent.getPixelDeltaInMillis(deltaX));
 			}
-			
 			@Override
 			public void mousePressed(MouseEvent event) {
 				TicketObject source = (TicketObject) event.getSource() ;
@@ -76,27 +81,14 @@ public class TicketObject extends JLabel implements Comparator<TicketObject> {
 				TimelineWrapper parent = (TimelineWrapper) source.getParent();
 				parent.moveToFront(source);
 			}
-			
 			@Override
-			public void mouseExited(MouseEvent e) {
-				// TODO Auto-generated method stub
-				
-			}
-			
+			public void mouseExited(MouseEvent e) {}
 			@Override
-			public void mouseEntered(MouseEvent e) {
-				// TODO Auto-generated method stub
-				
-			}
-			
+			public void mouseEntered(MouseEvent e) {}	
 			@Override
-			public void mouseClicked(MouseEvent e) {
-				// TODO Auto-generated method stub
-				
-			}
+			public void mouseClicked(MouseEvent e) {}
 		});
 	}
-
 	
 	
 	/**

@@ -2,13 +2,16 @@ package net.virtualqueues.qoperator.view;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Container;
+import java.awt.Dimension;
 import java.awt.Graphics;
-import java.awt.GridBagLayout;
 import java.awt.event.ComponentEvent;
 import java.awt.event.ComponentListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
+import java.awt.event.MouseWheelEvent;
+import java.awt.event.MouseWheelListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -16,20 +19,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
+import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
 
+import net.virtualqueues.model.Ticket;
+import net.virtualqueues.model.TicketsFactory;
 import net.virtualqueues.qoperator.controller.DailyTicketsManager;
 import net.virtualqueues.qoperator.model.DailyTickets;
 
 import org.joda.time.DateTime;
 
 public class TimelineWrapper extends JLayeredPane {
+	private static final int DEFAULT_TICKET_HEIGHT = 120;
 	private static final long serialVersionUID = 1L;
 	private static final String timelineBackgroundPath = "./res/timeline.png";
 	private static BufferedImage image;
 	private final DateTime day;
 	private final DailyTicketsManager dtm = new DailyTicketsManager(new DailyTickets());
 	private final List<TicketObject> ticketLabels = new ArrayList<TicketObject>();
+	private static int CURRENT_CENTER_POSITION = 0;
 	
 	private static int MAX_WIDTH = 0;
 	private static int MAX_HEIGHT = 0;
@@ -40,21 +49,19 @@ public class TimelineWrapper extends JLayeredPane {
 	private static int WIDTH = 0;
 	private static int HEIGHT = 0;
 	private static int START_HEIGHT = 0;
-	private static int START_WIDTH = 0;
 	private static int AREA_HEIGHT = 0;
 	private static int AREA_WIDTH = 0;
-
+	private static double ZOOM_FACTOR = 1;
+	private static double ZOOM_PLUS = 1.25;
+	private static double ZOOM_MINUS = 0.8;
 	private static int[] LAST_X = new int[1024];
 	private static int LAST_POINTER_POSITION = 0;
 	
-	private static final double IMAGE_TIMESPAN = 1.5;
+	private static double IMAGE_TIMESPAN = 1.0;
 	private static double PIXELS_PER_HOUR = 0;
-	//OFFSET will be used to calculate the difference from the most left viewable time to 12:00 at noon
-	private static int OFFSET = 0;
-	
 	public TimelineWrapper(DateTime day_arg){
 		day = day_arg;
-		
+
 		File imgFile = new File(timelineBackgroundPath);
 		try{
 			TimelineWrapper.image = ImageIO.read(imgFile);
@@ -69,7 +76,7 @@ public class TimelineWrapper extends JLayeredPane {
 		}
 		computeDimensions();
 		
-		setLayout(new GridBagLayout());
+		setLayout(null);
 		
 		//GridBagConstraints c = new GridBagConstraints();
 		addMouseMotionListener(new MouseMotionListener() {
@@ -85,7 +92,7 @@ public class TimelineWrapper extends JLayeredPane {
 					comp.setLocation(LAST_X[i] + event.getX(), comp.getY());
 					i++;
 				}
-				OFFSET += event.getX() - LAST_POINTER_POSITION ;
+				CURRENT_CENTER_POSITION -= (event.getX() - LAST_POINTER_POSITION);
 				
 				i=0;
 				for(Component comp : components){
@@ -93,9 +100,23 @@ public class TimelineWrapper extends JLayeredPane {
 					i++;
 				}
 				LAST_POINTER_POSITION = event.getX();
+				
+				
 				source.repaint();//XXX isn't this too heavy?
 			}
 		});
+		addMouseWheelListener(new MouseWheelListener() {
+			@Override
+			public void mouseWheelMoved(MouseWheelEvent event) {
+				if(event.getWheelRotation()  < 0){
+					zoomPlus();
+				}
+				else{
+					zoomMinus();
+				}
+			}
+		});
+		
 		addMouseListener(new MouseListener() {
 			@Override
 			public void mouseReleased(MouseEvent event) {}
@@ -116,21 +137,50 @@ public class TimelineWrapper extends JLayeredPane {
 			@Override
 			public void mouseClicked(MouseEvent arg0) {}
 		});
-		
-		ticketLabels.add(new TicketObject("Label is label", dtm.getUniqueOrderID(), mostLeftVisibleDateTime(0), 0));
-		
-		ticketLabels.add(new TicketObject("Another label", dtm.getUniqueOrderID(), mostLeftVisibleDateTime(20), 0));
-				
+
+		ticketLabels.add(new TicketObject(TicketsFactory.getTicketFromType(null, twelveoclock(9), dtm.getUniqueOrderID())));
+		ticketLabels.add(new TicketObject(TicketsFactory.getTicketFromType(null, twelveoclock(35), dtm.getUniqueOrderID())));
+
 		add(ticketLabels.get(0), JLayeredPane.DRAG_LAYER.intValue());
 		
 		ticketLabels.get(1).setForeground(new Color(255,122,0));
 		ticketLabels.get(1).setBackground(new Color(122,0,255));
 		add(ticketLabels.get(1), JLayeredPane.DRAG_LAYER.intValue());
 
+		JLabel greetings = new JLabel("Hi, please click me!");
+		greetings.setPreferredSize(new Dimension(300,400));
+		greetings.setBounds(0, 0,720 , 300);
+		greetings.setLocation(0, 0);
+		//greetings.setBackground(new Color(70,70,70));
+		greetings.setBorder(BorderFactory.createRaisedSoftBevelBorder());
+		greetings.setOpaque(true);
+		greetings.addMouseListener(new MouseListener() {			
+			@Override
+			public void mouseReleased(MouseEvent arg0) {}
+			@Override
+			public void mousePressed(MouseEvent arg0) {}
+			@Override
+			public void mouseExited(MouseEvent arg0) {}
+			@Override
+			public void mouseEntered(MouseEvent event) {
+				Component source = (Component) event.getSource();
+				Container parent = source.getParent();
+				parent.remove(source);
+				rearrange();
+			}
+			@Override
+			public void mouseClicked(MouseEvent arg0) {}
+		});
+		add(greetings);
+		moveToFront(greetings);
+		
+		
 		//TODO: put component listener that arranges the tickets on resize
 		addComponentListener(new ComponentListener() {
-			@Override
-			public void componentShown(ComponentEvent e) {}
+				@Override
+			public void componentShown(ComponentEvent e) {
+				rearrange();
+			}
 			@Override
 			public void componentResized(ComponentEvent e) {
 				rearrange();
@@ -141,59 +191,92 @@ public class TimelineWrapper extends JLayeredPane {
 			public void componentHidden(ComponentEvent e) {		}
 		});
 		
-		ComponentListener[] listeners = getComponentListeners();
-		for(ComponentListener lsnr : listeners){
-			System.out.println("counting: "+lsnr.toString());
-		}
-		//rearrange();
+		
+		
+		setTimelinePosition(new DateTime(2013, 1, 12, 6, 00));
 	}
 	
 	private void rearrange(){
+		computeDimensions();
 		for(TicketObject tickObj : ticketLabels){
-			int newPosition = getPosition(tickObj.ticketModel.getStartDate());
-			int newEnd = getPosition(tickObj.ticketModel.getEndDate());
+			int newPosition = getPosition(tickObj.ticketModel.getStartDate()) + WIDTH/2;
+			int newEnd = getPosition(tickObj.ticketModel.getEndDate()) + WIDTH/2;
 			int newWidth = newEnd - newPosition;
-			System.out.println(newPosition + " " + newEnd + " : " + tickObj.ticketModel.getStartDate().getMinuteOfDay() + " " + tickObj.ticketModel.getEndDate().getMinuteOfDay());
-			tickObj.setLocation(newPosition, tickObj.getY());
-			tickObj.setSize(newWidth, tickObj.getHeight());
+			//tickObj.setLocation(newPosition, tickObj.getY());
+			//tickObj.setSize(newWidth, tickObj.getHeight());
+			
+			tickObj.setBounds(newPosition, (HEIGHT - DEFAULT_TICKET_HEIGHT)/2, newWidth, DEFAULT_TICKET_HEIGHT);
+
 		}
+		repaint();
 	}
 	public int getPosition(final DateTime time) {
-		long DAY_MILLIS = time.getMillisOfDay();
-		DAY_MILLIS -= 1000 * 60 * 60 * 12; //minus 12 hours to get to 00:00
-		
-		double PANEL_OFFSET = ((double) DAY_MILLIS / (IMAGE_TIMESPAN * 60 * 60 * 1000)) * (double) AREA_WIDTH;
+		//computeDimensions();
+		long dayMillis = time.getMillisOfDay();
 
-		return (int) PANEL_OFFSET;
+		//offset in accordance with 0 o'clock's position
+		double midnightOffset = ((double) dayMillis / (60 * 60 * 1000)) * (double) PIXELS_PER_HOUR;
+
+		return (int) midnightOffset - CURRENT_CENTER_POSITION ; 
 	}
+	public int getPositionToMidnight(final DateTime time) {
+		//computeDimensions();
+		long dayMillis = time.getMillisOfDay();
 
-	private DateTime mostLeftVisibleDateTime(int minutesOffset){
-		//AREA_WIDTH equals 1.5 hours (1:30), see IMAGE_TIMESPAN
-		final long MINS_IN_AN_HOUR = 60;
-		final long SECS_IN_A_MIN = 60;
-		final long MILLIS_IN_A_SEC = 1000;
+		//offset in accordance with 0 o'clock's position
+		double midnightOffset = ((double) dayMillis / (60 * 60 * 1000)) * (double) PIXELS_PER_HOUR;
 
-		DateTime newTicketDate = new DateTime(day.getMillis() - day.getMillisOfDay() + 1000 * 60 * 60 * 12 + 
-				(((long) ((double) OFFSET / (double) AREA_WIDTH)) * MINS_IN_AN_HOUR + minutesOffset) * SECS_IN_A_MIN * MILLIS_IN_A_SEC);
-		System.out.println(newTicketDate);
+		return (int) midnightOffset; 
+	}
+	private DateTime twelveoclock(int minutesOffset){
+//		//AREA_WIDTH equals 1.5 hours (1:30), see IMAGE_TIMESPAN
+//		final long MINS_IN_AN_HOUR = 60;
+//		final long SECS_IN_A_MIN = 60;
+//		final long MILLIS_IN_A_SEC = 1000;
+
+		DateTime newTicketDate = new DateTime(day.getMillis() - day.getMillisOfDay() +
+				(((6) * 60) + minutesOffset) * 60 * 1000);
+
 		return newTicketDate;
 	}
+	
+	private DateTime getTime(int absoluteOffset){
+		long millis = day.getMillis() - day.getMillisOfDay() + ( (long) ( ((double) (((long) absoluteOffset)* 60 * 60 * 1000)) / PIXELS_PER_HOUR));
+		DateTime centerTime = new DateTime(millis);
+		//System.out.println(millis + "   time(millis) " + centerTime);
+		return centerTime;
+	}
 
-	public long getTimeDeltaMillis(int xDelta, DateTime oldDate){
+	public int getPixelDeltaInMillis(int xDelta){
 		//AREA_WIDTH equals 1.5 hours (1:30), see IMAGE_TIMESPAN
 		final long MINS_IN_AN_HOUR = 60;
 		final long SECS_IN_A_MIN = 60;
 		final long MILLIS_IN_A_SEC = 1000;
-
-		long timeDeltaMillis = ((long) ((double)( xDelta  * MINS_IN_AN_HOUR * SECS_IN_A_MIN * MILLIS_IN_A_SEC) / PIXELS_PER_HOUR));
+		int timeDeltaMillis = 0;
+		
+		if(xDelta != 0)
+			timeDeltaMillis = ((int) ((double)( xDelta  * MINS_IN_AN_HOUR * SECS_IN_A_MIN * MILLIS_IN_A_SEC) / PIXELS_PER_HOUR));
+		
 		return timeDeltaMillis;
 	}
 	
 	private void computeDimensions()
 	{
+		int oldAreaWidth = AREA_WIDTH;
+		
 		WIDTH = getWidth();
 		HEIGHT = getHeight();
-	
+		
+		MIN_WIDTH =  image.getWidth()/2;
+		MIN_HEIGHT = image.getHeight()/2;
+		MAX_WIDTH = image.getWidth();
+		MAX_HEIGHT = image.getHeight();
+		
+		MIN_WIDTH *= ZOOM_FACTOR;
+		MIN_HEIGHT *= ZOOM_FACTOR;
+		MAX_WIDTH *= ZOOM_FACTOR;
+		MAX_HEIGHT *= ZOOM_FACTOR;
+		
 		if(image != null)
 		{
 			if(WIDTH < MIN_WIDTH || HEIGHT < MIN_HEIGHT){//the area is too small to fit a usable timeline - make it paint outside
@@ -201,10 +284,9 @@ public class TimelineWrapper extends JLayeredPane {
 				AREA_HEIGHT = MIN_HEIGHT;
 				START_HEIGHT = 0;
 				if((HEIGHT - AREA_HEIGHT) / 2 > 0)
-					START_HEIGHT = (HEIGHT - AREA_HEIGHT) / 2;		
-				START_WIDTH = 0;
-				if((WIDTH - AREA_WIDTH) / 2 > 0)
-					START_WIDTH = (WIDTH - AREA_WIDTH) / 2;				
+					START_HEIGHT = (HEIGHT - AREA_HEIGHT) / 2;
+				if((WIDTH - AREA_WIDTH) / 2 > 0) {
+				}				
 			}
 			else if(WIDTH < MAX_WIDTH || HEIGHT < MAX_HEIGHT)//the area is still not large enough to fit the timeline, so we adjust
 			{
@@ -213,32 +295,69 @@ public class TimelineWrapper extends JLayeredPane {
 					AREA_HEIGHT = (int) (((float)WIDTH/(float)IMG_WIDTH)*(float)IMG_HEIGHT);
 					START_HEIGHT = 0;
 					if((HEIGHT - AREA_HEIGHT) / 2 > 0)
-						START_HEIGHT = (HEIGHT - AREA_HEIGHT) / 2;
-					START_WIDTH = 0;					
+						START_HEIGHT = (HEIGHT - AREA_HEIGHT) / 2;					
 				}
 				else{//height/width <= img.height / img.width ; wide rectangle area
 					AREA_WIDTH = (int) (((float)HEIGHT/(float)IMG_HEIGHT)*(float)IMG_WIDTH);
 					AREA_HEIGHT = HEIGHT;
-					START_WIDTH = 0;
-					if((WIDTH - AREA_WIDTH) / 2 > 0)
-						START_WIDTH = (WIDTH - AREA_WIDTH) / 2;
+					if((WIDTH - AREA_WIDTH) / 2 > 0) {
+					}
 					START_HEIGHT = 0;
 				}
 			}else{//the area is large enough - put the timeline in the middle
 				AREA_WIDTH = MAX_WIDTH;
 				AREA_HEIGHT = MAX_HEIGHT;
-				START_WIDTH = 0;
-				if((WIDTH - AREA_WIDTH) / 2 > 0)
-					START_WIDTH = (WIDTH - AREA_WIDTH) / 2;
+				if((WIDTH - AREA_WIDTH) / 2 > 0) {
+				}
 				START_HEIGHT = 0;
 				if((HEIGHT - AREA_HEIGHT) / 2 > 0)
 					START_HEIGHT = (HEIGHT - AREA_HEIGHT) / 2;
 			}
 			PIXELS_PER_HOUR = ((double) AREA_WIDTH / IMAGE_TIMESPAN);
 		}
+		
+		CURRENT_CENTER_POSITION *= ((float)AREA_WIDTH/(float)oldAreaWidth);
 	}
 	
+	public void zoomPlus(){
+		MIN_WIDTH =  image.getWidth()/2;
+		MIN_HEIGHT = image.getHeight()/2;
+		MAX_WIDTH = image.getWidth();
+		MAX_HEIGHT = image.getHeight();
 	
+		if(MAX_WIDTH * ZOOM_FACTOR * ZOOM_PLUS< WIDTH || MAX_HEIGHT * ZOOM_FACTOR * ZOOM_PLUS < HEIGHT){
+			ZOOM_FACTOR *= ZOOM_PLUS;
+			//CURRENT_CENTER_POSITION *= ZOOM_PLUS;
+		}
+		rearrange();
+	}
+	
+	public void zoomMinus(){
+		if(ZOOM_FACTOR > 0.2){
+			ZOOM_FACTOR *= ZOOM_MINUS;
+			//CURRENT_CENTER_POSITION *= ZOOM_MINUS;
+
+		}
+		rearrange();
+	}
+	
+	public void setTimelinePosition(final DateTime dt){
+		CURRENT_CENTER_POSITION = 0;
+		CURRENT_CENTER_POSITION = getPosition(dt);
+		rearrange();
+	}
+	/**
+	 * 
+	 * @param t the Ticket to add
+	 * @return true if successful, or false if not possible?
+	 */
+	public boolean addTicket(final Ticket t){
+		TicketObject newTicket = new TicketObject(t);
+		ticketLabels.add(newTicket);
+		this.add(newTicket);
+		
+		return true;
+	}
 	/**
 	 * Makes the timeline background resize in accordance with the timeline area size.
 	 * Use the properties MAX/MIN_TILE_WIDTH/HEIGHT in the constructor for adjustments
@@ -247,13 +366,37 @@ public class TimelineWrapper extends JLayeredPane {
 	public void paintComponent(Graphics g){
 		super.paintComponent(g);
 		computeDimensions();
-
+		
 		if(image != null)
 		{
-			float columns = (((float) getWidth()) / ((float) AREA_WIDTH));
-			for(int i=-1; i <= columns + 1; i++){
-				//OFFSET %= AREA_WIDTH;
-				g.drawImage(image, i*AREA_WIDTH + (OFFSET % AREA_WIDTH) , START_HEIGHT, AREA_WIDTH, AREA_HEIGHT, this );
+			float columns = (((float) getWidth()) / ((float) AREA_WIDTH)) + 1;
+			int i = (int) ((- columns - 2)/2);
+			int initial_i = i;
+			
+			int pixelsFor15MinutesInterval = (int) (PIXELS_PER_HOUR / 4);
+			int firstZeroX = (- CURRENT_CENTER_POSITION % AREA_WIDTH) + CURRENT_CENTER_POSITION + i*AREA_WIDTH ;
+			DateTime firstZeroTime = getTime(firstZeroX);
+			//System.out.println(ZOOM_FACTOR + "      " + CURRENT_CENTER_POSITION);
+			
+			try{
+				for(TicketObject t : ticketLabels){
+					System.out.println(t.ticketModel);
+
+				}
+			}catch(IndexOutOfBoundsException e){System.out.println("no 3rd ticket");}
+
+			
+			for(;i <= (columns + 2)/2; i++){
+				g.drawImage(image, i*AREA_WIDTH + (getWidth()/2) + (- CURRENT_CENTER_POSITION % AREA_WIDTH), START_HEIGHT, AREA_WIDTH, AREA_HEIGHT, this );
+								
+				for(int j=0; j < (int)(IMAGE_TIMESPAN/0.25); j++){
+					int hour = firstZeroTime.plusMinutes(15*j + (i-initial_i)*60).getHourOfDay();
+					int minuteOfDay = firstZeroTime.plusMinutes(15*j + (i-initial_i)*60).getMinuteOfDay();
+					int minute = (minuteOfDay - hour*60);
+					g.drawString(((hour < 10)?("0" + hour):hour)+":"+ ((minute < 10)?("0" + minute):minute), i*AREA_WIDTH + (getWidth()/2) + (- CURRENT_CENTER_POSITION % AREA_WIDTH) + j*pixelsFor15MinutesInterval, HEIGHT-20);
+					
+					//System.out.println(hour+":"+ (minute - hour*60) + " j" + j);
+				}
 			}
 			
 		}

@@ -2,6 +2,8 @@ package net.virtualqueues.qoperator.controller;
 
 import java.util.concurrent.LinkedBlockingQueue;
 
+import net.virtualqueues.controller.NetworkMessage;
+
 
 public class MessageQueue extends LinkedBlockingQueue<NetworkMessage> {
 	/**
